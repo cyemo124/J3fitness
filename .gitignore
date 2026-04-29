@@ -1,0 +1,76 @@
+# v0 runtime files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+
+# Common ignores
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.*.local
+
+# === DEPENDENCIES ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# === BUILD OUTPUT ===
+# Frontend (React/Vite/Next)
+dist/
+build/
+.out/
+.next/
+
+# Backend
+coverage/
+.nyc_output/
+
+# === LOGS ===
+logs/
+*.log
+logs/**/*.log
+
+# === OS FILES ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# === IDE / EDITOR ===
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# === UPLOADS & TEMP ===
+# If you store user uploads locally during dev
+uploads/
+tmp/
+temp/
+*.tmp
+
+# === DATABASE ===
+*.sqlite
+*.sqlite3
+*.db
+dump.rdb
+
+# === TESTING ===
+coverage/
+.nyc_output/
+
+# === MISC ===
+.cache/
+.eslintcache
+.parcel-cache/
