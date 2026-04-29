@@ -70,9 +70,9 @@ app.use("/api/v1/trainers", trainerRoutes);
 app.use("/api/v1/memberships", membershipRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/admin", adminRoutes);
-app.use("/api/v1/admin/trainer-applications", adminRoutes);
-app.use("/api/v1/admin/trainer-applications/:id/approve", adminRoutes);
-app.use("/api/v1/admin/trainer-applications/:id/reject", adminRoutes);
+// app.use("/api/v1/admin/trainer-applications", adminRoutes);
+// app.use("/api/v1/admin/trainer-applications/:id/approve", adminRoutes);
+// app.use("/api/v1/admin/trainer-applications/:id/reject", adminRoutes);
 app.use("/api/v1/routines", routineRoutes);
 app.use("/api/v1/workouts", workoutRoutes);
 
