@@ -1,5 +1,5 @@
 {
-  "name": "gym-website-backend",
+  "name": "j3fitness-backend",
   "version": "1.0.0",
   "description": "Backend for professional gym website with booking and payment system",
   "main": "src/server.js",
