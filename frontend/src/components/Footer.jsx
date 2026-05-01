@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { MapPin, Phone, Clock, Mail } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -98,7 +99,7 @@ export default function Footer() {
       transition={{ duration: 0.6 }}
       className="bg-black text-white pt-12 pb-6"
     >
-      <div className="container mx-auto px-4">
+      <div className="container px-4">
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -106,7 +107,8 @@ export default function Footer() {
           viewport={{ once: true, margin: "-100px" }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8"
         >
-          <motion.div variants={itemVariants}>
+          {/* Brand / Social */}
+          <motion.div variants={itemVariants} className="text-center">
             <motion.h3
               className="text-red-700 font-bold text-2xl mb-4"
               whileHover={{ scale: 1.05 }}
@@ -115,7 +117,7 @@ export default function Footer() {
               J³ Gym
             </motion.h3>
 
-            <div className="flex gap-4">
+            <div className="flex gap-4 justify-center">
               <motion.a
                 whileHover={{ scale: 1.2, rotate: 5 }}
                 whileTap={{ scale: 0.9 }}
@@ -140,39 +142,47 @@ export default function Footer() {
             </div>
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          {/* Quick Links */}
+          <motion.div
+            variants={itemVariants}
+            className="text-center md:text-left"
+          >
             <h4 className="font-bold text-lg mb-4">Quick Links</h4>
             <ul className="space-y-2 text-gray-400">
               <motion.li whileHover={linkHover}>
-                <a
-                  href="/classes"
+                <Link
+                  to="/classes"
                   className="hover:text-red-700 transition-colors block"
                 >
                   Classes
-                </a>
+                </Link>
               </motion.li>
               <motion.li whileHover={linkHover}>
-                <a
-                  href="/trainers"
+                <Link
+                  to="/trainers"
                   className="hover:text-red-700 transition-colors block"
                 >
                   Personal Trainers
-                </a>
+                </Link>
               </motion.li>
               <motion.li whileHover={linkHover}>
-                <a
-                  href="/pricing"
+                <Link
+                  to="/pricing"
                   className="hover:text-red-700 transition-colors block"
                 >
                   Membership Plans
-                </a>
+                </Link>
               </motion.li>
             </ul>
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          {/* Contact Us */}
+          <motion.div
+            variants={itemVariants}
+            className="text-center md:text-left"
+          >
             <h4 className="font-bold text-lg mb-4">Contact Us</h4>
-            <ul className="space-y-3 text-gray-400">
+            <ul className="space-y-3 text-gray-400 flex flex-col items-center md:items-start">
               <motion.li
                 className="flex items-start gap-3"
                 whileHover={{ x: 5 }}
@@ -216,7 +226,12 @@ export default function Footer() {
             </ul>
           </motion.div>
 
-          <div className="space-y-4">
+          {/* Newsletter */}
+          <motion.div
+            variants={itemVariants}
+            className="text-center md:text-left"
+          >
+            <h4 className="font-bold text-lg mb-4">Newsletter</h4>
             <AnimatePresence mode="wait">
               {subscribeStatus === "success" ? (
                 <motion.div
@@ -246,7 +261,7 @@ export default function Footer() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onSubmit={handleSubscribe}
-                  className="flex flex-col gap-2"
+                  className="flex flex-col gap-2 max-w-md mx-auto md:mx-0"
                 >
                   <motion.input
                     whileFocus={{ scale: 1.02, borderColor: "#dc2626" }}
@@ -268,7 +283,7 @@ export default function Footer() {
                 </motion.form>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
         </motion.div>
 
         <motion.div
@@ -278,32 +293,35 @@ export default function Footer() {
           transition={{ delay: 0.6, duration: 0.5 }}
           className="border-t border-gray-800 pt-6"
         >
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-center">
             <p className="text-gray-500 text-sm">
               &copy; {currentYear} J³ Gym. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm text-gray-500">
-              <motion.a
-                href="/privacy"
-                className="hover:text-white transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                Privacy Policy
-              </motion.a>
-              <motion.a
-                href="/terms"
-                className="hover:text-white transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                Terms of Service
-              </motion.a>
-              <motion.a
-                href="/sitemap"
-                className="hover:text-white transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                Sitemap
-              </motion.a>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link
+                  to="/privacy-policy"
+                  className="hover:text-white transition-colors"
+                >
+                  Privacy Policy
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link
+                  to="/terms-of-service"
+                  className="hover:text-white transition-colors"
+                >
+                  Terms of Service
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link
+                  to="/sitemap"
+                  className="hover:text-white transition-colors"
+                >
+                  Sitemap
+                </Link>
+              </motion.div>
             </div>
           </div>
         </motion.div>

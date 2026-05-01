@@ -21,6 +21,9 @@ import ProfilePage from "../pages/ProfilePage";
 import DashboardPage from "../pages/DashboardPage";
 import BookingsPage from "../pages/BookingsPage";
 import MembershipPage from "../pages/MembershipPage";
+import PrivacyPolicyPage from "../pages/PrivatePolicyPage";
+import TermsOfServicePage from "../pages/TermsOfServicePage";
+import SitemapPage from "../pages/SitemapPage";
 
 import AdminLayout from "./AdminLayout";
 import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
@@ -72,6 +75,9 @@ export default function AnimatedRoutes() {
               path="/application-submitted"
               element={<ApplicationSubmittedPage />}
             />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+            <Route path="/sitemap" element={<SitemapPage />} />
 
             {/* Protected Member Routes */}
             <Route

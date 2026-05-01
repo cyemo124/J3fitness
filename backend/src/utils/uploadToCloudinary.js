@@ -15,13 +15,14 @@ export const uploadToCloudinary = (fileBuffer) => {
 };
 
 // Helper to generate face-focused Cloudinary URL
-const getFaceFocusedUrl = (publicId, width = 400, height = 400) => {
+const getFaceFocusedUrl = (publicId, width = 600, height = 750) => {
   return cloudinary.url(publicId, {
     width,
     height,
     crop: "fill", // Changed from "thumb" to "fill"
-    gravity: "auto:face", // Face at top, fills rest with body
-    quality: "auto",
+    gravity: "face", // Face at top, fills rest with body
+    quality: "auto:best",
+    dpr: "auto",
     fetch_format: "auto",
   });
 };

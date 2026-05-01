@@ -33,9 +33,33 @@ export const getAllTrainers = async (req, res, next) => {
 
     const total = await Trainer.countDocuments({ isActive: true });
 
+    // ✅ ADD faceUrl to each trainer
+    const trainersWithFaceUrl = trainers.map((trainer) => {
+      const trainerObj = trainer.toObject();
+
+      // If trainer has a Cloudinary image, generate face-focused URL
+      if (trainerObj.profileImage?.public_id) {
+        trainerObj.profileImage = {
+          ...trainerObj.profileImage,
+          faceUrl: getFaceFocusedUrl(
+            trainerObj.profileImage.public_id,
+            400,
+            500,
+          ),
+          faceUrlLarge: getFaceFocusedUrl(
+            trainerObj.profileImage.public_id,
+            500,
+            600,
+          ),
+        };
+      }
+
+      return trainerObj;
+    });
+
     res.status(200).json({
       success: true,
-      data: trainers,
+      data: trainersWithFaceUrl, // ✅ Return modified trainers
       pagination: {
         total,
         page: parseInt(page),
@@ -56,7 +80,22 @@ export const getTrainerById = async (req, res, next) => {
 
     if (!trainer) throw new AppError("Trainer not found", 404);
 
-    res.status(200).json({ success: true, data: trainer });
+    // ✅ ADD faceUrl to single trainer
+    const trainerObj = trainer.toObject();
+
+    if (trainerObj.profileImage?.public_id) {
+      trainerObj.profileImage = {
+        ...trainerObj.profileImage,
+        faceUrl: getFaceFocusedUrl(trainerObj.profileImage.public_id, 400, 500),
+        faceUrlLarge: getFaceFocusedUrl(
+          trainerObj.profileImage.public_id,
+          500,
+          600,
+        ),
+      };
+    }
+
+    res.status(200).json({ success: true, data: trainerObj });
   } catch (error) {
     next(error);
   }

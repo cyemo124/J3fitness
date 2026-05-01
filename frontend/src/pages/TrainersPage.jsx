@@ -106,7 +106,7 @@ export default function TrainersPage() {
                     whileHover={{ y: -6, scale: 1.02 }}
                   >
                     {/* Image - Face-focused Cloudinary transformation */}
-                    <div className="relative mb-4 overflow-hidden rounded-lg bg-gray-200 h-48">
+                    <div className="relative mb-4 overflow-hidden rounded-lg bg-gray-200 aspect-[16/9] md:aspect-[4/5]">
                       <img
                         src={
                           trainer.profileImage?.faceUrl ||
