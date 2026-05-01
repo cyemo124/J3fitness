@@ -261,7 +261,7 @@ export default function Footer() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onSubmit={handleSubscribe}
-                  className="flex flex-col gap-2 max-w-sm mx-auto md:mx-0"
+                  className="flex flex-col gap-2 max-w-xs mx-auto md:mx-0"
                 >
                   <motion.input
                     whileFocus={{ scale: 1.02, borderColor: "#dc2626" }}
