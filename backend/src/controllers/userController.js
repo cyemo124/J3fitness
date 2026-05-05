@@ -116,6 +116,8 @@ export const getDashboard = async (req, res, next) => {
       .populate("classId", "name schedule")
       .sort({ classDate: -1 })
       .limit(3);
+    console.log("Found bookings:", recentBookings.length); // ← Add this
+    console.log("First booking:", recentBookings[0]);
 
     // 3. Today's workout from routine
     const routine = await Routine.findOne({ user: userId });

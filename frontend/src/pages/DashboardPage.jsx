@@ -33,7 +33,7 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         const response = await userAPI.getDashboard();
-        const data = response?.data?.data;
+        const data = response?.data
 
         if (data) {
           setMembershipInfo(data.membership);
