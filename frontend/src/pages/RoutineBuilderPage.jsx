@@ -1,4 +1,5 @@
-import { useState } from "react";
+// src/pages/RoutineBuilderPage.jsx
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -9,6 +10,10 @@ import {
   AlertTriangle,
   CheckCircle,
   X,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
 } from "lucide-react";
 import { routineAPI } from "../services/api.js";
 import PageWrapper from "../components/PageWrapper";
@@ -43,7 +48,100 @@ function InlineToast({ message, type, onClose }) {
   );
 }
 
+function RoutineCard({ routine, onDelete }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const totalExercises = routine.days?.reduce(
+    (sum, d) => sum + (d.exercises?.length || 0),
+    0,
+  );
+
+  const activeDays = routine.days?.filter(
+    (d) => d.exercises?.length > 0,
+  ).length;
+
+  return (
+    <motion.div
+      layout
+      className="card mb-4"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <h3 className="text-xl font-bold text-dark">{routine.name}</h3>
+          <p className="text-sm text-gray-600">
+            {activeDays} days • {totalExercises} exercises
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <motion.button
+            onClick={() => setExpanded(!expanded)}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+          >
+            {expanded ? (
+              <ChevronUp className="w-5 h-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-600" />
+            )}
+          </motion.button>
+          <motion.button
+            onClick={() => onDelete(routine._id)}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="p-2 hover:bg-red-50 rounded-lg transition text-red-600"
+          >
+            <Trash2 className="w-5 h-5" />
+          </motion.button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-3 mt-4">
+              {routine.days
+                ?.filter((d) => d.exercises?.length > 0)
+                .map((day, idx) => (
+                  <div key={idx} className="bg-gray-50 rounded-lg p-3">
+                    <h4 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4 text-red-600" />
+                      {day.name}
+                    </h4>
+                    <div className="space-y-1">
+                      {day.exercises.map((ex, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-gray-600"
+                        >
+                          <span className="w-5 h-5 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs font-bold">
+                            {i + 1}
+                          </span>
+                          {ex.name || ex}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 export default function RoutineBuilderPage() {
+  const [routines, setRoutines] = useState([]);
+  const [loadingRoutines, setLoadingRoutines] = useState(true);
   const [routineName, setRoutineName] = useState("");
   const [days, setDays] = useState([
     { name: "Monday", exercises: [] },
@@ -60,6 +158,39 @@ export default function RoutineBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState(null);
   const [shakeName, setShakeName] = useState(false);
+
+  // Fetch existing routines on mount
+  useEffect(() => {
+    fetchRoutines();
+  }, []);
+
+  const fetchRoutines = async () => {
+    try {
+      setLoadingRoutines(true);
+      const response = await routineAPI.getRoutine();
+      const data = response?.data;
+
+      // Handle both single object and array
+      const routinesArray = Array.isArray(data) ? data : data ? [data] : [];
+
+      setRoutines(routinesArray);
+    } catch (err) {
+      console.error("Failed to load routines:", err);
+      showNotification("Failed to load your routines", "error");
+    } finally {
+      setLoadingRoutines(false);
+    }
+  };
+
+  const deleteRoutine = async (id) => {
+    try {
+      await routineAPI.deleteRoutine(id);
+      setRoutines((prev) => prev.filter((r) => r._id !== id));
+      showNotification("Routine deleted", "success");
+    } catch (err) {
+      showNotification("Failed to delete routine", "error");
+    }
+  };
 
   const showNotification = (message, type = "error") => {
     setNotification({ message, type });
@@ -104,7 +235,6 @@ export default function RoutineBuilderPage() {
 
     setSaving(true);
 
-    // FIXED: Convert exercises from strings to objects with `name` property
     const routine = {
       name: routineName.trim(),
       days: days.map((d) => ({
@@ -114,10 +244,20 @@ export default function RoutineBuilderPage() {
     };
 
     try {
-      await routineAPI.saveRoutine(routine); // FIXED: Use saveRoutine, not createRoutine
+      await routineAPI.saveRoutine(routine);
       showNotification("Routine saved successfully!", "success");
       setRoutineName("");
-      setDays(days.map((d) => ({ ...d, exercises: [] })));
+      setDays([
+        { name: "Monday", exercises: [] },
+        { name: "Tuesday", exercises: [] },
+        { name: "Wednesday", exercises: [] },
+        { name: "Thursday", exercises: [] },
+        { name: "Friday", exercises: [] },
+        { name: "Saturday", exercises: [] },
+        { name: "Sunday", exercises: [] },
+      ]);
+      // Refresh routines list
+      await fetchRoutines();
     } catch (err) {
       console.error("Error saving routine:", err);
       showNotification(
@@ -145,7 +285,15 @@ export default function RoutineBuilderPage() {
             </h1>
             <p className="text-gray-600">
               {totalExercises > 0
-                ? `${totalExercises} exercise${totalExercises !== 1 ? "s" : ""} across ${days.filter((d) => d.exercises.length > 0).length} day${days.filter((d) => d.exercises.length > 0).length !== 1 ? "s" : ""}`
+                ? `${totalExercises} exercise${
+                    totalExercises !== 1 ? "s" : ""
+                  } across ${
+                    days.filter((d) => d.exercises.length > 0).length
+                  } day${
+                    days.filter((d) => d.exercises.length > 0).length !== 1
+                      ? "s"
+                      : ""
+                  }`
                 : "Build your weekly workout routine"}
             </p>
           </motion.div>
@@ -160,12 +308,51 @@ export default function RoutineBuilderPage() {
             )}
           </AnimatePresence>
 
+          {/* EXISTING ROUTINES SECTION */}
+          {loadingRoutines ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+            </div>
+          ) : routines.length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mb-8"
+            >
+              <h2 className="text-2xl font-bold text-dark mb-4">
+                Your Routines
+              </h2>
+              {routines.map((routine) => (
+                <RoutineCard
+                  key={routine._id}
+                  routine={routine}
+                  onDelete={deleteRoutine}
+                />
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-8 text-gray-500 mb-8 bg-gray-50 rounded-xl"
+            >
+              <Dumbbell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No saved routines yet. Create your first one below!</p>
+            </motion.div>
+          )}
+
+          {/* BUILDER SECTION */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="card mb-6"
           >
+            <div className="flex items-center gap-2 mb-4">
+              <Plus className="w-5 h-5 text-red-600" />
+              <h2 className="text-lg font-bold">Create New Routine</h2>
+            </div>
+
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Routine Name <span className="text-red-500">*</span>
             </label>
@@ -175,11 +362,15 @@ export default function RoutineBuilderPage() {
                 placeholder="e.g. Push Pull Legs"
                 value={routineName}
                 onChange={(e) => setRoutineName(e.target.value)}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition ${shakeName ? "border-red-500 bg-red-50" : "border-gray-300"}`}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition ${
+                  shakeName ? "border-red-500 bg-red-50" : "border-gray-300"
+                }`}
               />
             </motion.div>
           </motion.div>
 
+          {/* ... rest of builder code stays the same ... */}
+          {/* Day selector */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -200,12 +391,20 @@ export default function RoutineBuilderPage() {
                     onClick={() => setSelectedDayIndex(index)}
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.95 }}
-                    className={`relative px-4 py-2 rounded-xl font-medium transition-all ${isSelected ? "bg-red-600 text-white shadow-md" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    className={`relative px-4 py-2 rounded-xl font-medium transition-all ${
+                      isSelected
+                        ? "bg-red-600 text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
                   >
                     {day.name.slice(0, 3)}
                     {exerciseCount > 0 && (
                       <span
-                        className={`absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold ${isSelected ? "bg-white text-red-600" : "bg-red-600 text-white"}`}
+                        className={`absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold ${
+                          isSelected
+                            ? "bg-white text-red-600"
+                            : "bg-red-600 text-white"
+                        }`}
                       >
                         {exerciseCount}
                       </span>
@@ -216,6 +415,7 @@ export default function RoutineBuilderPage() {
             </div>
           </motion.div>
 
+          {/* Add exercise */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -250,6 +450,7 @@ export default function RoutineBuilderPage() {
             </div>
           </motion.div>
 
+          {/* Exercise list */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -301,6 +502,7 @@ export default function RoutineBuilderPage() {
             </AnimatePresence>
           </motion.div>
 
+          {/* Save button */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
