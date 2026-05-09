@@ -57,6 +57,6 @@ const membershipSchema = new mongoose.Schema(
   },
 );
 
-// CHANGED: Register as "MembershipPlan" to match your populate calls
+
 const MembershipPlan = mongoose.model("MembershipPlan", membershipSchema);
 export default MembershipPlan;
