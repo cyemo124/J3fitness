@@ -1,22 +1,23 @@
+// src/pages/ClassDetailPage.jsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { classAPI, bookingAPI, userAPI } from "../services/api"; // CHANGED: added userAPI
-import { motion, AnimatePresence } from "framer-motion"; // CHANGED: added AnimatePresence
+import { classAPI, bookingAPI, userAPI } from "../services/api";
+import { motion, AnimatePresence } from "framer-motion";
 import ImageWithFallBack from "../components/ImageWithFallBack";
 import PageWrapper from "../components/PageWrapper";
+import { Lock, Crown, ArrowRight } from "lucide-react"; // ← NEW imports
 
 export default function ClassDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, membership } = useAuth(); // ← pull membership from auth
   const [classData, setClassData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // NEW: Payment & enrollment state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
@@ -42,7 +43,6 @@ export default function ClassDetailPage() {
     }
   };
 
-  // NEW: Check if user already booked this class
   const checkExistingBooking = async () => {
     try {
       const response = await userAPI.getBookings();
@@ -60,10 +60,19 @@ export default function ClassDetailPage() {
     }
   };
 
-  // NEW: Open payment modal instead of booking directly
+  // ─── UPDATED: Check subscription before booking ───
   const handleBookClass = () => {
     if (!isAuthenticated) {
       navigate("/login");
+      return;
+    }
+    if (!membership || membership.status !== "active") {
+      // No active subscription — show upgrade prompt instead of payment modal
+      setError("Active membership required to book classes.");
+      // Scroll to upgrade section or navigate
+      document
+        .getElementById("membership-gate")
+        ?.scrollIntoView({ behavior: "smooth" });
       return;
     }
     if (alreadyEnrolled) {
@@ -73,19 +82,14 @@ export default function ClassDetailPage() {
     setShowPaymentModal(true);
   };
 
-  // NEW: Dummy payment flow
   const processDummyPayment = async () => {
     setPaymentProcessing(true);
     setError("");
 
-    // Simulate Paystack/network delay
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Simulate payment success (in production, this would be Paystack callback)
     setPaymentProcessing(false);
     setShowPaymentModal(false);
-
-    // Now actually book the class
     await createBooking();
   };
 
@@ -114,7 +118,6 @@ export default function ClassDetailPage() {
     }
   };
 
-  // Helper to get next occurrence of a weekday
   const getNextClassDate = (dayName) => {
     const days = [
       "Sunday",
@@ -195,6 +198,11 @@ export default function ClassDetailPage() {
     classData.currentEnrollment,
     classData.capacity,
   );
+
+  // ─── Determine button state based on membership ───
+  const hasActiveMembership = membership?.status === "active";
+  const isButtonDisabled =
+    isFull || booking || alreadyEnrolled || !hasActiveMembership;
 
   return (
     <PageWrapper>
@@ -381,18 +389,57 @@ export default function ClassDetailPage() {
                 </div>
               </motion.div>
 
+              {/* ─── MEMBERSHIP GATE BANNER (shown when no active sub) ─── */}
+              {isAuthenticated && !hasActiveMembership && (
+                <motion.div
+                  id="membership-gate"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.3 }}
+                  className="card mb-6 border-2 border-amber-200 bg-amber-50"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <Lock className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-amber-900 mb-1">
+                        Membership Required
+                      </h3>
+                      <p className="text-sm text-amber-700 mb-3">
+                        Active subscription needed to book classes. Subscribe to
+                        unlock all gym features.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => navigate("/pricing")}
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-semibold flex items-center gap-2"
+                        >
+                          <Crown className="w-4 h-4" />
+                          View Plans
+                        </button>
+                        <button
+                          onClick={() => navigate("/payment-history")}
+                          className="px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 transition text-sm"
+                        >
+                          My Subscription
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Action Button */}
               <motion.button
                 onClick={handleBookClass}
-                disabled={isFull || booking || alreadyEnrolled}
+                disabled={isButtonDisabled}
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.8, ease: "easeOut" }}
-                whileTap={
-                  !isFull && !booking && !alreadyEnrolled ? { scale: 0.98 } : {}
-                }
+                whileTap={!isButtonDisabled ? { scale: 0.98 } : {}}
                 className={`w-full py-3 text-lg font-bold text-white rounded transition-all duration-300 ${
-                  isFull || alreadyEnrolled
+                  isButtonDisabled
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-red-600 hover:bg-red-700 hover:shadow-lg"
                 }`}
@@ -401,9 +448,11 @@ export default function ClassDetailPage() {
                   ? "Processing..."
                   : alreadyEnrolled
                     ? "Already Enrolled"
-                    : isFull
-                      ? "Class is Full"
-                      : `Enroll — ${formatPrice(classData.price)}`}
+                    : !hasActiveMembership && isAuthenticated
+                      ? "Membership Required"
+                      : isFull
+                        ? "Class is Full"
+                        : `Enroll — ${formatPrice(classData.price)}`}
               </motion.button>
 
               {!isAuthenticated && (
@@ -425,7 +474,7 @@ export default function ClassDetailPage() {
           </div>
         </div>
 
-        {/* NEW: Dummy Payment Modal */}
+        {/* Dummy Payment Modal */}
         <AnimatePresence>
           {showPaymentModal && (
             <motion.div
@@ -440,7 +489,6 @@ export default function ClassDetailPage() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
               >
-                {/* Test Mode Banner */}
                 <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-3 py-2 rounded mb-4 text-center text-sm font-semibold">
                   🧪 TEST MODE — No real money will be charged
                 </div>
@@ -465,7 +513,6 @@ export default function ClassDetailPage() {
                   </div>
                 </div>
 
-                {/* Dummy Card UI */}
                 <div className="space-y-3 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

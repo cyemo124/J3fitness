@@ -8,7 +8,9 @@ import {
   getMembershipInfo,
   renewMembership,
   getPaymentHistory,
-  getDashboard
+  getDashboard,
+  addWeightEntry,
+  getWeightHistory
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -24,5 +26,7 @@ router.get('/bookings', getUserBookings);
 router.get('/membership', getMembershipInfo);
 router.put('/membership/renew', renewMembership);
 router.get('/payment-history', getPaymentHistory);
+router.post('/weight', addWeightEntry);
+router.get('/weight', getWeightHistory);
 
 export default router;

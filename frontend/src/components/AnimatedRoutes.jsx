@@ -24,6 +24,8 @@ import MembershipPage from "../pages/MembershipPage";
 import PrivacyPolicyPage from "../pages/PrivatePolicyPage";
 import TermsOfServicePage from "../pages/TermsOfServicePage";
 import SitemapPage from "../pages/SitemapPage";
+import MembershipCheckout from "../pages/MembershipCheckout";
+import PaymentHistoryPage from "../pages/PaymentHistoryPage";
 
 import AdminLayout from "./AdminLayout";
 import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
@@ -132,7 +134,16 @@ export default function AnimatedRoutes() {
               path="/membership"
               element={
                 <ProtectedRoute>
-                  <MembershipPage />
+                  <MembershipCheckout />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/payment-history"
+              element={
+                <ProtectedRoute>
+                  <PaymentHistoryPage />
                 </ProtectedRoute>
               }
             />

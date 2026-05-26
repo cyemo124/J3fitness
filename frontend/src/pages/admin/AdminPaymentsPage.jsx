@@ -23,12 +23,54 @@ export default function AdminPaymentsPage() {
     try {
       setLoading(true);
       setError("");
-      const response = await adminAPI.getPayments(page, 12, {
-        status: filter === "all" ? null : filter,
+
+      let allPayments = [];
+      let backendPagination = {};
+
+      try {
+        const response = await adminAPI.getPayments(page, 12, {
+          status: filter === "all" ? null : filter,
+        });
+        allPayments = response.data || [];
+        backendPagination = response.pagination || {};
+        setStats(response.stats || {});
+      } catch (backendErr) {
+        console.log("Backend payments not available, using dummy data");
+      }
+
+      const dummyPayments = [];
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("paymentHistory_")) {
+          const userHistory = JSON.parse(localStorage.getItem(key) || "[]");
+          dummyPayments.push(...userHistory);
+        }
       });
-      setPayments(response.data);
-      setPagination(response.pagination || {});
-      setStats(response.stats || {});
+
+      const merged = [...allPayments, ...dummyPayments].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      );
+
+      const filtered =
+        filter === "all" ? merged : merged.filter((p) => p.status === filter);
+
+      const pageSize = 12;
+      const start = (page - 1) * pageSize;
+      const paginated = filtered.slice(start, start + pageSize);
+
+      setPayments(paginated);
+      setPagination({
+        page,
+        pages: Math.ceil(filtered.length / pageSize) || 1,
+        total: filtered.length,
+      });
+
+      setStats({
+        totalRevenue: merged
+          .filter((p) => p.status === "successful")
+          .reduce((sum, p) => sum + (p.amount || 0), 0),
+        successfulCount: merged.filter((p) => p.status === "successful").length,
+        pendingCount: merged.filter((p) => p.status === "pending").length,
+      });
     } catch (error) {
       setError("Failed to load payments");
     } finally {
@@ -76,7 +118,6 @@ export default function AdminPaymentsPage() {
   return (
     <div className="min-h-screen bg-light py-12">
       <div className="container mx-auto px-4">
-        {/* Header */}
         <motion.div
           variants={fadeUp}
           initial="hidden"
@@ -89,7 +130,6 @@ export default function AdminPaymentsPage() {
           <p className="text-gray-600">Track and manage all gym payments</p>
         </motion.div>
 
-        {/* Error */}
         {error && (
           <motion.div
             variants={fadeUp}
@@ -101,7 +141,6 @@ export default function AdminPaymentsPage() {
           </motion.div>
         )}
 
-        {/* Stats */}
         {Object.keys(stats).length > 0 && (
           <motion.div
             variants={fadeUp}
@@ -132,7 +171,6 @@ export default function AdminPaymentsPage() {
           </motion.div>
         )}
 
-        {/* Filter */}
         <motion.div
           variants={fadeUp}
           initial="hidden"
@@ -157,14 +195,12 @@ export default function AdminPaymentsPage() {
           ))}
         </motion.div>
 
-        {/* Loading */}
         {loading ? (
           <div className="flex justify-center items-center min-h-96">
             <div className="animate-spin h-10 w-10 border-b-2 border-primary rounded-full"></div>
           </div>
         ) : payments.length > 0 ? (
           <>
-            {/* Table */}
             <motion.div
               variants={fadeUp}
               initial="hidden"
@@ -207,6 +243,11 @@ export default function AdminPaymentsPage() {
                         <p className="text-xs text-gray-500">
                           {payment.userId?.email}
                         </p>
+                        {payment.isDummy && (
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded mt-1 inline-block">
+                            TEST
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3 px-4">
@@ -247,7 +288,6 @@ export default function AdminPaymentsPage() {
               </table>
             </motion.div>
 
-            {/* Pagination */}
             {pagination.pages > 1 && (
               <motion.div
                 variants={fadeUp}

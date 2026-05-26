@@ -20,12 +20,51 @@ export const updateProfile = async (req, res, next) => {
   try {
     const { firstName, lastName, phone, dateOfBirth, gender, address } =
       req.body;
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { firstName, lastName, phone, dateOfBirth, gender, address },
-      { new: true, runValidators: true },
-    );
+
+    // Build update object
+    const updateData = {
+      firstName,
+      lastName,
+      phone,
+      dateOfBirth,
+      gender,
+      address,
+    };
+
+    // Handle weightHistory if present
+    if (req.body.weightHistory) {
+      updateData.weightHistory = req.body.weightHistory.map((w) =>
+        typeof w === "number" ? { weight: w } : w,
+      );
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.id, updateData, {
+      new: true,
+      runValidators: true,
+    });
+
     res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addWeightEntry = async (req, res, next) => {
+  try {
+    const { weight } = req.body;
+    const user = await User.findById(req.user.id);
+    user.weightHistory.push({ weight: Number(weight) });
+    await user.save();
+    res.status(200).json({ success: true, data: user.weightHistory });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getWeightHistory = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select("weightHistory");
+    res.status(200).json({ success: true, data: user.weightHistory });
   } catch (error) {
     next(error);
   }

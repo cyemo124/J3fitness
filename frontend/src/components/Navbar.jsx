@@ -183,6 +183,9 @@ export default function Navbar() {
                         <NavLink to="/membership" className={dropdownClass}>
                           Membership
                         </NavLink>
+                        <NavLink to="/payment-history" className={dropdownClass}>
+                          Payment history
+                        </NavLink>
 
                         {["admin", "super_admin"].includes(user?.role) && (
                           <NavLink to="/admin" className={dropdownClass}>

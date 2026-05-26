@@ -230,7 +230,7 @@ export const userAPI = {
 
   changePassword: async (data) => {
     try {
-      const response = await api.put("/users/password", data); // Note: /password not /change-password
+      const response = await api.put("/users/password", data);
       return response.data;
     } catch (err) {
       throw new Error(
@@ -261,7 +261,6 @@ export const userAPI = {
   },
 
   renewMembership: async () => {
-    // Note: Your route doesn't take planId param in URL, check if it's in body
     try {
       const response = await api.put("/users/membership/renew");
       return response.data;
@@ -273,7 +272,6 @@ export const userAPI = {
   },
 
   getPaymentHistory: async () => {
-    // Note: Your route doesn't have pagination params in backend
     try {
       const response = await api.get("/users/payment-history");
       return response.data;
@@ -282,7 +280,6 @@ export const userAPI = {
     }
   },
 
-  // Workouts are separate routes, not under /users
   createWorkout: async (data) => {
     try {
       const response = await api.post("/workouts", data);
@@ -321,6 +318,27 @@ export const userAPI = {
     } catch (err) {
       throw new Error(
         err.response?.data?.message || "Failed to load dashboard",
+      );
+    }
+  },
+
+  // ← FIXED: moved inside the object, added try/catch
+  addWeight: async (weight) => {
+    try {
+      const response = await api.post("/users/weight", { weight });
+      return response.data;
+    } catch (err) {
+      throw new Error(err.response?.data?.message || "Failed to add weight");
+    }
+  },
+
+  getWeightHistory: async () => {
+    try {
+      const response = await api.get("/users/weight");
+      return response.data;
+    } catch (err) {
+      throw new Error(
+        err.response?.data?.message || "Failed to load weight history",
       );
     }
   },

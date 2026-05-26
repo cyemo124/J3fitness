@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Flame, Calendar, Dumbbell, CreditCard } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, membership } = useAuth(); // ← pull resolved membership from context
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -33,10 +33,25 @@ export default function DashboardPage() {
       try {
         setLoading(true);
         const response = await userAPI.getDashboard();
-        const data = response?.data
+        const data = response?.data;
 
         if (data) {
-          setMembershipInfo(data.membership);
+          // ─── MERGE DUMMY MEMBERSHIP INTO DASHBOARD DATA ───
+          // Priority: dummy membership (from AuthContext) > backend membership > null
+          const resolvedMembership = membership || data.membership || null;
+
+          setMembershipInfo({
+            ...resolvedMembership,
+            // Ensure these fields exist for display
+            status: resolvedMembership?.status || "inactive",
+            expiryDate:
+              resolvedMembership?.expiresAt ||
+              resolvedMembership?.expiryDate ||
+              null,
+            planName: resolvedMembership?.planName || "No Plan",
+            accessLevel: resolvedMembership?.accessLevel || "none",
+          });
+
           setStreak(data.streak || 0);
           setMissedWorkout(data.missedWorkout || false);
           setTodayWorkout(data.todayWorkout);
@@ -52,7 +67,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboard();
-  }, []);
+  }, [membership]); // ← re-fetch when membership changes (e.g. after dummy payment)
 
   const dismissAlert = () => {
     setDismissedAlert(true);
@@ -146,6 +161,11 @@ export default function DashboardPage() {
                     ? "text-green-600"
                     : "text-red-600",
                 icon: CreditCard,
+                // Show plan name as subtext when active
+                subtext:
+                  membershipInfo?.status === "active"
+                    ? membershipInfo.planName
+                    : null,
               },
               {
                 title: "Classes Booked",
@@ -164,7 +184,12 @@ export default function DashboardPage() {
                 value: membershipInfo?.expiryDate
                   ? new Date(membershipInfo.expiryDate).toLocaleDateString()
                   : "N/A",
-                color: "text-gray-600",
+                color:
+                  membershipInfo?.expiryDate &&
+                  new Date(membershipInfo.expiryDate) <
+                    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                    ? "text-red-600" // red if expiring within 7 days
+                    : "text-gray-600",
                 icon: Calendar,
               },
             ].map((item, i) => (
@@ -184,9 +209,48 @@ export default function DashboardPage() {
                 <p className={`text-2xl font-bold ${item.color || ""}`}>
                   {item.value}
                 </p>
+                {item.subtext && (
+                  <p className="text-xs text-gray-500 mt-1">{item.subtext}</p>
+                )}
               </motion.div>
             ))}
           </motion.div>
+
+          {/* MEMBERSHIP BANNER (shows when dummy or real membership active) */}
+          {membershipInfo?.status === "active" && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-4 rounded-lg mb-8 border-l-4 ${
+                membershipInfo.paymentMethod?.includes("dummy")
+                  ? "bg-yellow-50 border-yellow-400"
+                  : "bg-green-50 border-green-400"
+              }`}
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-bold text-lg">
+                    {membershipInfo.planName}
+                    {membershipInfo.paymentMethod?.includes("dummy") && (
+                      <span className="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded">
+                        TEST MODE
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {membershipInfo.accessLevel?.toUpperCase()} access • Expires{" "}
+                    {new Date(membershipInfo.expiryDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <Link
+                  to="/payment-history"
+                  className="text-sm text-red-600 hover:underline font-semibold"
+                >
+                  Manage →
+                </Link>
+              </div>
+            </motion.div>
+          )}
 
           {/* MAIN GRID */}
           <motion.div
@@ -392,8 +456,11 @@ export default function DashboardPage() {
                   { to: "/profile", label: "Edit Profile", icon: CreditCard },
                   { to: "/classes", label: "Browse Classes", icon: Calendar },
                   {
-                    to: "/membership",
-                    label: "Renew Membership",
+                    to: "/payments",
+                    label:
+                      membershipInfo?.status === "active"
+                        ? "Manage Membership"
+                        : "Subscribe",
                     icon: CreditCard,
                   },
                 ].map((link, i) => (

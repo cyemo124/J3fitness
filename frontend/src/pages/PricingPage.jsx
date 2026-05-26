@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { membershipAPI } from "../services/api";
-import PageWrapper from "../components/PageWrapper";
 import { motion } from "framer-motion";
 
 export default function PricingPage() {
@@ -10,7 +9,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, membership } = useAuth();
 
   useEffect(() => {
     fetchPlans();
@@ -56,6 +55,26 @@ export default function PricingPage() {
     return badges[level] || "bg-gray-100 text-gray-800";
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.12,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 25 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: "easeOut" },
+    },
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-light">
@@ -65,67 +84,85 @@ export default function PricingPage() {
   }
 
   return (
-    <PageWrapper>
-      <div className="min-h-screen bg-light py-12">
-        <div className="container mx-auto px-4">
-          {/* Header */}
+    <motion.div
+      className="min-h-screen bg-light py-12"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div className="container mx-auto px-4">
+        <motion.div
+          className="text-center mb-12"
+          initial={{ opacity: 0, y: -15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="text-4xl font-bold text-dark mb-4">
+            Membership Plans
+          </h1>
+          <p className="text-xl text-gray-600">
+            Choose the perfect plan for your fitness goals
+          </p>
+        </motion.div>
+
+        {/* Active membership banner */}
+        {membership?.status === "active" && (
           <motion.div
-            className="text-center mb-12"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            className="bg-green-50 border-2 border-green-200 rounded-xl p-6 mb-8 max-w-2xl mx-auto"
           >
-            <h1 className="text-4xl font-bold text-dark mb-4">
-              Membership Plans
-            </h1>
-            <p className="text-xl text-gray-600">
-              Choose the perfect plan for your fitness goals
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-2xl">✓</span>
+              <h2 className="text-xl font-bold text-green-800">
+                You have an active subscription
+              </h2>
+            </div>
+            <p className="text-green-700 mb-4">
+              You're on <strong>{membership.planName}</strong> (
+              {membership.accessLevel}) until{" "}
+              {new Date(membership.expiresAt).toLocaleDateString()}.
             </p>
+            <button
+              onClick={() => navigate("/payment-history")}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+            >
+              Manage Subscription →
+            </button>
           </motion.div>
+        )}
 
-          {/* Error */}
-          {error && (
-            <motion.div
-              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-8"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              {error}
-            </motion.div>
-          )}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-8">
+            {error}
+          </div>
+        )}
 
-          {plans.length === 0 ? (
-            <motion.div
-              className="text-center py-12"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <p className="text-gray-600 text-lg">
-                No membership plans available at the moment.
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-              initial="hidden"
-              animate="visible"
-              variants={{
-                visible: { transition: { staggerChildren: 0.25 } },
-              }}
-            >
-              {plans.map((plan) => (
+        {plans.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600 text-lg">
+              No membership plans available at the moment.
+            </p>
+          </div>
+        ) : (
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+            variants={containerVariants}
+            initial="hidden"
+            animate="show"
+          >
+            {plans.map((plan) => {
+              const isCurrentPlan = membership?.planId === plan._id;
+              const hasActivePlan = membership?.status === "active";
+
+              return (
                 <motion.div
                   key={plan._id}
-                  className={`card border-2 hover:shadow-lg transition-all ${getAccessLevelColor(plan.accessLevel)}`}
-                  variants={{
-                    hidden: { opacity: 0, y: 30 },
-                    visible: {
-                      opacity: 1,
-                      y: 0,
-                      transition: { duration: 0.45 },
-                    },
-                  }}
-                  whileHover={{ y: -6, scale: 1.02 }}
+                  variants={cardVariants}
+                  whileHover={{ y: -4 }}
+                  className={`card border-2 hover:shadow-lg transition-all ${getAccessLevelColor(plan.accessLevel)} ${
+                    isCurrentPlan ? "ring-2 ring-green-500" : ""
+                  }`}
                 >
                   {/* Badge */}
                   <div className="flex justify-between items-start mb-4">
@@ -134,11 +171,18 @@ export default function PricingPage() {
                         {plan.name}
                       </h3>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${getAccessLevelBadge(plan.accessLevel)}`}
-                    >
-                      {plan.accessLevel.toUpperCase()}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-bold ${getAccessLevelBadge(plan.accessLevel)}`}
+                      >
+                        {plan.accessLevel.toUpperCase()}
+                      </span>
+                      {isCurrentPlan && (
+                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                          ✓ CURRENT
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -160,8 +204,8 @@ export default function PricingPage() {
                   </div>
 
                   {/* Key Features */}
-                  <div className="mb-6 pb-6 border-b space-y-2">
-                    {plan.classesPerMonth && (
+                  <div className="mb-6 pb-6 border-b">
+                    <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <span className="text-primary font-bold">⚡</span>
                         <span>
@@ -170,36 +214,36 @@ export default function PricingPage() {
                             : `${plan.classesPerMonth} classes/month`}
                         </span>
                       </div>
-                    )}
-                    {plan.benefits?.unlimitedClasses && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-500">✓</span>
-                        <span>Unlimited access</span>
-                      </div>
-                    )}
-                    {plan.benefits?.personalTrainingIncluded > 0 && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-500">✓</span>
-                        <span>
-                          {plan.benefits.personalTrainingIncluded} PT sessions
-                        </span>
-                      </div>
-                    )}
-                    {plan.benefits?.priorityBooking && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-500">✓</span>
-                        <span>Priority booking</span>
-                      </div>
-                    )}
-                    {plan.benefits?.guestPasses > 0 && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-500">✓</span>
-                        <span>{plan.benefits.guestPasses} guest passes</span>
-                      </div>
-                    )}
+                      {plan.benefits?.unlimitedClasses && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span>Unlimited access</span>
+                        </div>
+                      )}
+                      {plan.benefits?.personalTrainingIncluded > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span>
+                            {plan.benefits.personalTrainingIncluded} PT sessions
+                          </span>
+                        </div>
+                      )}
+                      {plan.benefits?.priorityBooking && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span>Priority booking</span>
+                        </div>
+                      )}
+                      {plan.benefits?.guestPasses > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-500">✓</span>
+                          <span>{plan.benefits.guestPasses} guest passes</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Features */}
+                  {/* All Features */}
                   {plan.features && plan.features.length > 0 && (
                     <div className="mb-6">
                       <h4 className="font-semibold text-sm text-gray-700 mb-3">
@@ -220,58 +264,51 @@ export default function PricingPage() {
                   )}
 
                   {/* CTA Button */}
-                  <motion.button
-                    onClick={() => handleSelectPlan(plan)}
-                    whileHover={{ scale: 1.04 }}
-                    whileTap={{ scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-full bg-red-700 text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800"
-                  >
-                    {isAuthenticated ? "Get Started" : "Login to Subscribe"}
-                  </motion.button>
+                  {isCurrentPlan ? (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => navigate("/payment-history")}
+                      className="w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition-colors"
+                    >
+                      Manage Subscription
+                    </motion.button>
+                  ) : hasActivePlan ? (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => navigate("/payment-history")}
+                      className="w-full border-2 border-gray-300 text-gray-600 font-bold py-3 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Change from {membership.planName} →
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleSelectPlan(plan)}
+                      className="w-full bg-red-700 text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition-colors"
+                    >
+                      {isAuthenticated ? "Get Started" : "Login to Subscribe"}
+                    </motion.button>
+                  )}
                 </motion.div>
-              ))}
-            </motion.div>
-          )}
-
-          {/* FAQ Section */}
-          <motion.div
-            className="mt-16 max-w-3xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <h2 className="text-2xl font-bold text-center mb-8">
-              Frequently Asked Questions
-            </h2>
-            <div className="space-y-4">
-              <div className="card">
-                <h4 className="font-bold mb-2">
-                  Can I change my membership plan?
-                </h4>
-                <p className="text-gray-600 text-sm">
-                  Yes, you can upgrade or downgrade your plan at any time.
-                  Changes take effect on your next billing cycle.
-                </p>
-              </div>
-              <div className="card">
-                <h4 className="font-bold mb-2">Is there a cancellation fee?</h4>
-                <p className="text-gray-600 text-sm">
-                  No cancellation fees. You can cancel your membership anytime
-                  through your dashboard.
-                </p>
-              </div>
-              <div className="card">
-                <h4 className="font-bold mb-2">Do you offer refunds?</h4>
-                <p className="text-gray-600 text-sm">
-                  We offer a 7-day money-back guarantee if you're not satisfied
-                  with your membership.
-                </p>
-              </div>
-            </div>
+              );
+            })}
           </motion.div>
-        </div>
+        )}
       </div>
-    </PageWrapper>
+
+      <motion.div
+        className="text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <button
+          onClick={() => navigate("/classes")}
+          className="mt-8 border border-red-600 text-red-600 px-6 py-3 rounded-lg hover:bg-red-600 hover:text-white transition"
+        >
+          ← Back to Classes
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }

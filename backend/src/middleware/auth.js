@@ -41,3 +41,14 @@ export const authorize = (...allowedRoles) => {
     next();
   };
 };
+
+export const requireNoActiveMembership = async (req, res, next) => {
+  const user = await User.findById(req.user.id);
+  if (user.membership?.status === "active") {
+    return res.status(400).json({
+      success: false,
+      message: "You already have an active membership",
+    });
+  }
+  next();
+};

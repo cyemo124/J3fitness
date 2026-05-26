@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Pencil,
 } from "lucide-react";
 import { routineAPI } from "../services/api.js";
 import PageWrapper from "../components/PageWrapper";
@@ -48,97 +49,6 @@ function InlineToast({ message, type, onClose }) {
   );
 }
 
-function RoutineCard({ routine, onDelete }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const totalExercises = routine.days?.reduce(
-    (sum, d) => sum + (d.exercises?.length || 0),
-    0,
-  );
-
-  const activeDays = routine.days?.filter(
-    (d) => d.exercises?.length > 0,
-  ).length;
-
-  return (
-    <motion.div
-      layout
-      className="card mb-4"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <div className="flex justify-between items-start mb-3">
-        <div>
-          <h3 className="text-xl font-bold text-dark">{routine.name}</h3>
-          <p className="text-sm text-gray-600">
-            {activeDays} days • {totalExercises} exercises
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <motion.button
-            onClick={() => setExpanded(!expanded)}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
-          >
-            {expanded ? (
-              <ChevronUp className="w-5 h-5 text-gray-600" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-gray-600" />
-            )}
-          </motion.button>
-          <motion.button
-            onClick={() => onDelete(routine._id)}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 hover:bg-red-50 rounded-lg transition text-red-600"
-          >
-            <Trash2 className="w-5 h-5" />
-          </motion.button>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="overflow-hidden"
-          >
-            <div className="space-y-3 mt-4">
-              {routine.days
-                ?.filter((d) => d.exercises?.length > 0)
-                .map((day, idx) => (
-                  <div key={idx} className="bg-gray-50 rounded-lg p-3">
-                    <h4 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4 text-red-600" />
-                      {day.name}
-                    </h4>
-                    <div className="space-y-1">
-                      {day.exercises.map((ex, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-2 text-sm text-gray-600"
-                        >
-                          <span className="w-5 h-5 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs font-bold">
-                            {i + 1}
-                          </span>
-                          {ex.name || ex}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
 export default function RoutineBuilderPage() {
   const [routines, setRoutines] = useState([]);
   const [loadingRoutines, setLoadingRoutines] = useState(true);
@@ -158,8 +68,11 @@ export default function RoutineBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState(null);
   const [shakeName, setShakeName] = useState(false);
+  // ─── Track which routine is being edited ───
+  const [editingRoutineId, setEditingRoutineId] = useState(null);
+  // ─── Track expanded routine cards ───
+  const [expandedRoutineId, setExpandedRoutineId] = useState(null);
 
-  // Fetch existing routines on mount
   useEffect(() => {
     fetchRoutines();
   }, []);
@@ -169,10 +82,7 @@ export default function RoutineBuilderPage() {
       setLoadingRoutines(true);
       const response = await routineAPI.getRoutine();
       const data = response?.data;
-
-      // Handle both single object and array
       const routinesArray = Array.isArray(data) ? data : data ? [data] : [];
-
       setRoutines(routinesArray);
     } catch (err) {
       console.error("Failed to load routines:", err);
@@ -186,10 +96,67 @@ export default function RoutineBuilderPage() {
     try {
       await routineAPI.deleteRoutine(id);
       setRoutines((prev) => prev.filter((r) => r._id !== id));
+      // Clear editing state if we just deleted the one being edited
+      if (editingRoutineId === id) {
+        resetBuilder();
+      }
       showNotification("Routine deleted", "success");
     } catch (err) {
       showNotification("Failed to delete routine", "error");
     }
+  };
+
+  // ─── NEW: Load routine into builder for editing ───
+  const loadRoutineForEditing = (routine) => {
+    setRoutineName(routine.name);
+    setEditingRoutineId(routine._id);
+
+    // Normalize exercises to strings for the builder
+    const normalizedDays = [
+      { name: "Monday", exercises: [] },
+      { name: "Tuesday", exercises: [] },
+      { name: "Wednesday", exercises: [] },
+      { name: "Thursday", exercises: [] },
+      { name: "Friday", exercises: [] },
+      { name: "Saturday", exercises: [] },
+      { name: "Sunday", exercises: [] },
+    ];
+
+    routine.days?.forEach((day) => {
+      const dayIndex = normalizedDays.findIndex(
+        (d) => d.name.toLowerCase() === day.name.toLowerCase(),
+      );
+      if (dayIndex !== -1) {
+        normalizedDays[dayIndex].exercises = day.exercises.map((ex) =>
+          typeof ex === "string" ? ex : ex.name || "",
+        );
+      }
+    });
+
+    setDays(normalizedDays);
+    setSelectedDayIndex(0);
+    showNotification(`Editing "${routine.name}"`, "success");
+
+    // Scroll to builder
+    document
+      .getElementById("routine-builder")
+      ?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // ─── NEW: Reset builder to create new routine ───
+  const resetBuilder = () => {
+    setRoutineName("");
+    setEditingRoutineId(null);
+    setDays([
+      { name: "Monday", exercises: [] },
+      { name: "Tuesday", exercises: [] },
+      { name: "Wednesday", exercises: [] },
+      { name: "Thursday", exercises: [] },
+      { name: "Friday", exercises: [] },
+      { name: "Saturday", exercises: [] },
+      { name: "Sunday", exercises: [] },
+    ]);
+    setSelectedDayIndex(0);
   };
 
   const showNotification = (message, type = "error") => {
@@ -244,19 +211,17 @@ export default function RoutineBuilderPage() {
     };
 
     try {
-      await routineAPI.saveRoutine(routine);
-      showNotification("Routine saved successfully!", "success");
-      setRoutineName("");
-      setDays([
-        { name: "Monday", exercises: [] },
-        { name: "Tuesday", exercises: [] },
-        { name: "Wednesday", exercises: [] },
-        { name: "Thursday", exercises: [] },
-        { name: "Friday", exercises: [] },
-        { name: "Saturday", exercises: [] },
-        { name: "Sunday", exercises: [] },
-      ]);
-      // Refresh routines list
+      if (editingRoutineId) {
+        // Update existing
+        await routineAPI.updateRoutine(editingRoutineId, routine);
+        showNotification("Routine updated successfully!", "success");
+      } else {
+        // Create new
+        await routineAPI.saveRoutine(routine);
+        showNotification("Routine saved successfully!", "success");
+      }
+
+      resetBuilder();
       await fetchRoutines();
     } catch (err) {
       console.error("Error saving routine:", err);
@@ -270,6 +235,13 @@ export default function RoutineBuilderPage() {
   };
 
   const totalExercises = days.reduce((sum, d) => sum + d.exercises.length, 0);
+
+  // ─── Helper: get exercise name for display ───
+  const getExerciseName = (ex) => {
+    if (typeof ex === "string") return ex;
+    if (ex?.name) return ex.name;
+    return "Unnamed Exercise";
+  };
 
   return (
     <PageWrapper>
@@ -322,13 +294,119 @@ export default function RoutineBuilderPage() {
               <h2 className="text-2xl font-bold text-dark mb-4">
                 Your Routines
               </h2>
-              {routines.map((routine) => (
-                <RoutineCard
-                  key={routine._id}
-                  routine={routine}
-                  onDelete={deleteRoutine}
-                />
-              ))}
+              {routines.map((routine) => {
+                const totalExercises = routine.days?.reduce(
+                  (sum, d) => sum + (d.exercises?.length || 0),
+                  0,
+                );
+                const activeDays = routine.days?.filter(
+                  (d) => d.exercises?.length > 0,
+                ).length;
+                const isExpanded = expandedRoutineId === routine._id;
+
+                return (
+                  <motion.div
+                    key={routine._id}
+                    layout
+                    className="card mb-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="text-xl font-bold text-dark">
+                          {routine.name}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {activeDays} days • {totalExercises} exercises
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <motion.button
+                          onClick={() => loadRoutineForEditing(routine)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          className={`p-2 rounded-lg transition ${
+                            editingRoutineId === routine._id
+                              ? "bg-blue-100 text-blue-600"
+                              : "hover:bg-blue-50 text-blue-600"
+                          }`}
+                          title="Edit routine"
+                        >
+                          <Pencil className="w-5 h-5" />
+                        </motion.button>
+                        <motion.button
+                          onClick={() =>
+                            setExpandedRoutineId(
+                              isExpanded ? null : routine._id,
+                            )
+                          }
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title={isExpanded ? "Collapse" : "Expand"}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="w-5 h-5 text-gray-600" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-gray-600" />
+                          )}
+                        </motion.button>
+                        <motion.button
+                          onClick={() => deleteRoutine(routine._id)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          className="p-2 hover:bg-red-50 rounded-lg transition text-red-600"
+                          title="Delete routine"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </motion.button>
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="space-y-3 mt-4">
+                            {routine.days
+                              ?.filter((d) => d.exercises?.length > 0)
+                              .map((day, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-gray-50 rounded-lg p-3"
+                                >
+                                  <h4 className="font-semibold text-sm text-gray-700 mb-2 flex items-center gap-2">
+                                    <CalendarDays className="w-4 h-4 text-red-600" />
+                                    {day.name}
+                                  </h4>
+                                  <div className="space-y-1">
+                                    {day.exercises.map((ex, i) => (
+                                      <div
+                                        key={i}
+                                        className="flex items-center gap-2 text-sm text-gray-600"
+                                      >
+                                        <span className="w-5 h-5 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs font-bold">
+                                          {i + 1}
+                                        </span>
+                                        {getExerciseName(ex)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           ) : (
             <motion.div
@@ -342,192 +420,218 @@ export default function RoutineBuilderPage() {
           )}
 
           {/* BUILDER SECTION */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="card mb-6"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Plus className="w-5 h-5 text-red-600" />
-              <h2 className="text-lg font-bold">Create New Routine</h2>
-            </div>
-
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Routine Name <span className="text-red-500">*</span>
-            </label>
-            <motion.div animate={shakeName ? { x: [-10, 10, -10, 10, 0] } : {}}>
-              <input
-                type="text"
-                placeholder="e.g. Push Pull Legs"
-                value={routineName}
-                onChange={(e) => setRoutineName(e.target.value)}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition ${
-                  shakeName ? "border-red-500 bg-red-50" : "border-gray-300"
-                }`}
-              />
-            </motion.div>
-          </motion.div>
-
-          {/* ... rest of builder code stays the same ... */}
-          {/* Day selector */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="card mb-6"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <CalendarDays className="w-5 h-5 text-red-600" />
-              <h2 className="text-lg font-bold">Select Day</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {days.map((day, index) => {
-                const exerciseCount = day.exercises.length;
-                const isSelected = selectedDayIndex === index;
-                return (
-                  <motion.button
-                    key={index}
-                    onClick={() => setSelectedDayIndex(index)}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`relative px-4 py-2 rounded-xl font-medium transition-all ${
-                      isSelected
-                        ? "bg-red-600 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    {day.name.slice(0, 3)}
-                    {exerciseCount > 0 && (
-                      <span
-                        className={`absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold ${
-                          isSelected
-                            ? "bg-white text-red-600"
-                            : "bg-red-600 text-white"
-                        }`}
-                      >
-                        {exerciseCount}
-                      </span>
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </motion.div>
-
-          {/* Add exercise */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="card mb-6"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Dumbbell className="w-5 h-5 text-red-600" />
-              <h2 className="text-lg font-bold">Add Exercise</h2>
-              <span className="text-sm text-gray-500 font-normal">
-                ({days[selectedDayIndex].name})
-              </span>
-            </div>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder="e.g. Bench Press"
-                value={newExercise}
-                onChange={(e) => setNewExercise(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
-              />
-              <motion.button
-                onClick={addExercise}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition flex items-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Add
-              </motion.button>
-            </div>
-          </motion.div>
-
-          {/* Exercise list */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="card mb-8"
-          >
-            <h2 className="text-lg font-bold mb-4">
-              Exercises for {days[selectedDayIndex].name}
-            </h2>
-            <AnimatePresence mode="popLayout">
-              {days[selectedDayIndex].exercises.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-8 text-gray-500"
-                >
-                  <Dumbbell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No exercises yet</p>
-                </motion.div>
-              ) : (
-                <div className="space-y-2">
-                  {days[selectedDayIndex].exercises.map((ex, i) => (
-                    <motion.div
-                      key={`${selectedDayIndex}-${i}`}
-                      layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-lg group hover:bg-gray-100 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-sm font-bold">
-                          {i + 1}
-                        </span>
-                        <span className="font-medium">{ex}</span>
-                      </div>
-                      <motion.button
-                        onClick={() => removeExercise(i)}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </motion.button>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-
-          {/* Save button */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <motion.button
-              onClick={saveRoutine}
-              disabled={saving}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full bg-red-600 text-white px-6 py-4 rounded-xl font-bold text-lg hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg"
+          <div id="routine-builder">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="card mb-6"
             >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  Save Routine
-                </>
-              )}
-            </motion.button>
-          </motion.div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  {editingRoutineId ? (
+                    <Pencil className="w-5 h-5 text-blue-600" />
+                  ) : (
+                    <Plus className="w-5 h-5 text-red-600" />
+                  )}
+                  <h2 className="text-lg font-bold">
+                    {editingRoutineId ? "Edit Routine" : "Create New Routine"}
+                  </h2>
+                </div>
+                {editingRoutineId && (
+                  <button
+                    onClick={resetBuilder}
+                    className="text-sm text-gray-500 hover:text-red-600 transition"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Routine Name <span className="text-red-500">*</span>
+              </label>
+              <motion.div
+                animate={shakeName ? { x: [-10, 10, -10, 10, 0] } : {}}
+              >
+                <input
+                  type="text"
+                  placeholder="e.g. Push Pull Legs"
+                  value={routineName}
+                  onChange={(e) => setRoutineName(e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition ${
+                    shakeName ? "border-red-500 bg-red-50" : "border-gray-300"
+                  }`}
+                />
+              </motion.div>
+            </motion.div>
+
+            {/* Day selector */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="card mb-6"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <CalendarDays className="w-5 h-5 text-red-600" />
+                <h2 className="text-lg font-bold">Select Day</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {days.map((day, index) => {
+                  const exerciseCount = day.exercises.length;
+                  const isSelected = selectedDayIndex === index;
+                  return (
+                    <motion.button
+                      key={index}
+                      onClick={() => setSelectedDayIndex(index)}
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`relative px-4 py-2 rounded-xl font-medium transition-all ${
+                        isSelected
+                          ? "bg-red-600 text-white shadow-md"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {day.name.slice(0, 3)}
+                      {exerciseCount > 0 && (
+                        <span
+                          className={`absolute -top-2 -right-2 w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold ${
+                            isSelected
+                              ? "bg-white text-red-600"
+                              : "bg-red-600 text-white"
+                          }`}
+                        >
+                          {exerciseCount}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+
+            {/* Add exercise */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="card mb-6"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Dumbbell className="w-5 h-5 text-red-600" />
+                <h2 className="text-lg font-bold">Add Exercise</h2>
+                <span className="text-sm text-gray-500 font-normal">
+                  ({days[selectedDayIndex].name})
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="e.g. Bench Press"
+                  value={newExercise}
+                  onChange={(e) => setNewExercise(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                />
+                <motion.button
+                  onClick={addExercise}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add
+                </motion.button>
+              </div>
+            </motion.div>
+
+            {/* Exercise list */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="card mb-8"
+            >
+              <h2 className="text-lg font-bold mb-4">
+                Exercises for {days[selectedDayIndex].name}
+              </h2>
+              <AnimatePresence mode="popLayout">
+                {days[selectedDayIndex].exercises.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-8 text-gray-500"
+                  >
+                    <Dumbbell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No exercises yet</p>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-2">
+                    {days[selectedDayIndex].exercises.map((ex, i) => (
+                      <motion.div
+                        key={`${selectedDayIndex}-${i}`}
+                        layout
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        className="flex justify-between items-center bg-gray-50 px-4 py-3 rounded-lg group hover:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-sm font-bold">
+                            {i + 1}
+                          </span>
+                          <span className="font-medium">
+                            {getExerciseName(ex)}
+                          </span>
+                        </div>
+                        <motion.button
+                          onClick={() => removeExercise(i)}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </motion.button>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            {/* Save button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <motion.button
+                onClick={saveRoutine}
+                disabled={saving}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-red-600 text-white px-6 py-4 rounded-xl font-bold text-lg hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-3 shadow-lg"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Saving...
+                  </>
+                ) : editingRoutineId ? (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Update Routine
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save Routine
+                  </>
+                )}
+              </motion.button>
+            </motion.div>
+          </div>
         </div>
       </div>
     </PageWrapper>
