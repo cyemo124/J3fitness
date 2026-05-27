@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../hooks/useAuth";
-import { paymentAPI, membershipAPI } from "../services/api";
+import { paymentAPI, membershipAPI, userAPI } from "../services/api";
 import {
   CheckCircle,
   X,
@@ -15,8 +15,7 @@ import {
 
 export default function PaymentHistoryPage() {
   const navigate = useNavigate();
-  const { user, membership, cancelMembership, getPaymentHistory, updateUser } =
-    useAuth();
+  const { user, membership, cancelMembership, updateUser } = useAuth();
 
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +33,7 @@ export default function PaymentHistoryPage() {
   const [plansLoading, setPlansLoading] = useState(false);
   const [selectedNewPlan, setSelectedNewPlan] = useState(null);
   const [changePlanProcessing, setChangePlanProcessing] = useState(false);
+  const [showChangePaymentModal, setShowChangePaymentModal] = useState(false);
 
   useEffect(() => {
     fetchPayments();
@@ -69,7 +69,11 @@ export default function PaymentHistoryPage() {
         console.log("Backend payments not available, using dummy data");
       }
 
-      const dummyPayments = getPaymentHistory();
+      const historyKey = `paymentHistory_${user?._id}`;
+      const dummyPayments = JSON.parse(
+        localStorage.getItem(historyKey) || "[]",
+      );
+
       const merged = [...allPayments, ...dummyPayments].sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
       );
@@ -93,10 +97,19 @@ export default function PaymentHistoryPage() {
     }
   };
 
+  // ─── UPDATED: Cancel hits backend then refreshes user ───
   const handleCancel = async () => {
     try {
       setCancelling(true);
-      await cancelMembership();
+
+      // Call backend API to cancel
+      await userAPI.cancelDummyMembership();
+
+      // Refresh user from backend to get updated state
+      const freshUser = await userAPI.getProfile();
+      const userData = freshUser.data || freshUser;
+      updateUser(userData);
+
       showToast("success", "Membership cancelled successfully");
       setShowCancelConfirm(false);
       fetchPayments();
@@ -114,7 +127,6 @@ export default function PaymentHistoryPage() {
     try {
       const response = await membershipAPI.getAll();
       const plans = response.data || response || [];
-      // Filter out current plan
       setAvailablePlans(
         plans.filter(
           (p) => p._id !== membership?.planId && p._id !== membership?.planId,
@@ -128,7 +140,7 @@ export default function PaymentHistoryPage() {
     }
   };
 
-  // ─── PROCESS PLAN CHANGE ───
+  // ─── UPDATED: Plan change hits backend API ───
   const handleConfirmChangePlan = async () => {
     if (!selectedNewPlan) {
       showToast("error", "Select a plan first");
@@ -138,34 +150,19 @@ export default function PaymentHistoryPage() {
     setChangePlanProcessing(true);
 
     try {
-      // Simulate payment processing (1.5s delay)
+      // Simulate payment processing
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Calculate new expiry (extend from now or keep existing?)
-      // Option: Reset expiry based on new plan duration
-      const newExpiresAt = new Date(
-        Date.now() + selectedNewPlan.durationMonths * 30 * 24 * 60 * 60 * 1000,
-      ).toISOString();
-
-      const updatedSubscription = {
-        ...membership,
+      // ─── CALL BACKEND TO CHANGE PLAN ───
+      await userAPI.changeDummyMembership({
         planId: selectedNewPlan._id,
         planName: selectedNewPlan.name,
         accessLevel: selectedNewPlan.accessLevel,
         price: selectedNewPlan.price,
         durationMonths: selectedNewPlan.durationMonths,
-        expiresAt: newExpiresAt,
-        transactionRef: `DUMMY_CHANGE_${Date.now()}`,
-        changedAt: new Date().toISOString(),
-      };
+      });
 
-      // Update localStorage
-      localStorage.setItem(
-        `membershipSubscription_${user._id}`,
-        JSON.stringify(updatedSubscription),
-      );
-
-      // Add payment record for the change
+      // ─── SAVE PAYMENT HISTORY TO LOCALSTORAGE (frontend-only record) ───
       const paymentRecord = {
         _id: `dummy_change_${Date.now()}`,
         userId: {
@@ -177,11 +174,12 @@ export default function PaymentHistoryPage() {
         type: "membership",
         amount: selectedNewPlan.price,
         status: "successful",
-        reference: updatedSubscription.transactionRef,
+        reference: `DUMMY_CHANGE_${Date.now()}`,
         planName: selectedNewPlan.name,
         createdAt: new Date().toISOString(),
         isDummy: true,
-        note: `Plan change from ${membership.planName}`,
+        paymentMethod: "dummy_change_payment",
+        note: `Plan change from ${membership.planName} to ${selectedNewPlan.name}`,
       };
 
       const historyKey = `paymentHistory_${user._id}`;
@@ -191,13 +189,15 @@ export default function PaymentHistoryPage() {
       existingHistory.unshift(paymentRecord);
       localStorage.setItem(historyKey, JSON.stringify(existingHistory));
 
-      // Update auth context
-      const updatedUser = { ...user, membership: updatedSubscription };
-      updateUser(updatedUser);
+      // ─── REFRESH USER FROM BACKEND ───
+      const freshUser = await userAPI.getProfile();
+      const userData = freshUser.data || freshUser;
+      updateUser(userData);
 
       showToast("success", `Successfully changed to ${selectedNewPlan.name}!`);
       setShowChangePlan(false);
       setSelectedNewPlan(null);
+      setShowChangePaymentModal(false);
       fetchPayments();
     } catch (err) {
       showToast("error", err.message || "Failed to change plan");
@@ -689,7 +689,7 @@ export default function PaymentHistoryPage() {
                     Keep Current Plan
                   </button>
                   <button
-                    onClick={handleConfirmChangePlan}
+                    onClick={() => setShowChangePaymentModal(true)}
                     disabled={!selectedNewPlan || changePlanProcessing}
                     className="flex-1 py-3 rounded-lg bg-red-600 text-white hover:bg-red-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                   >
@@ -704,6 +704,112 @@ export default function PaymentHistoryPage() {
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* CHANGE PLAN PAYMENT MODAL */}
+        <AnimatePresence>
+          {showChangePaymentModal && selectedNewPlan && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl"
+              >
+                <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-3 py-2 rounded mb-4 text-center text-sm font-semibold">
+                  🧪 TEST MODE — No real money will be charged
+                </div>
+
+                <h2 className="text-2xl font-bold mb-2">Confirm Plan Change</h2>
+
+                <p className="text-gray-600 mb-4">
+                  You are changing to <strong>{selectedNewPlan.name}</strong>
+                </p>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-5">
+                  <div className="flex justify-between mb-2">
+                    <span>Current Plan</span>
+                    <span className="font-medium">{membership?.planName}</span>
+                  </div>
+
+                  <div className="flex justify-between mb-2">
+                    <span>New Plan</span>
+                    <span className="font-medium">{selectedNewPlan.name}</span>
+                  </div>
+
+                  <div className="flex justify-between border-t pt-2 text-lg font-bold">
+                    <span>Total</span>
+                    <span className="text-red-600">
+                      {formatPrice(selectedNewPlan.price)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Card Number
+                    </label>
+                    <input
+                      type="text"
+                      defaultValue="4242 4242 4242 4242"
+                      readOnly
+                      className="w-full px-3 py-2 border rounded bg-gray-100 text-gray-600"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Expiry
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue="12/30"
+                        readOnly
+                        className="w-full px-3 py-2 border rounded bg-gray-100 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        CVV
+                      </label>
+                      <input
+                        type="text"
+                        defaultValue="123"
+                        readOnly
+                        className="w-full px-3 py-2 border rounded bg-gray-100 text-gray-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowChangePaymentModal(false)}
+                    disabled={changePlanProcessing}
+                    className="flex-1 py-3 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={handleConfirmChangePlan}
+                    disabled={changePlanProcessing}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {changePlanProcessing ? "Processing..." : "Pay & Change"}
                   </button>
                 </div>
               </motion.div>

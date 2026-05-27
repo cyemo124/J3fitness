@@ -3,9 +3,6 @@ import axios from "axios";
 
 export const AuthContext = createContext();
 
-const DUMMY_SUB_PREFIX = "membershipSubscription_";
-const PAYMENT_HISTORY_PREFIX = "paymentHistory_";
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
@@ -13,24 +10,12 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [membership, setMembership] = useState(null);
 
+  // ─── Resolve membership from user object (now from backend) ───
   const resolveMembership = useCallback(() => {
     if (user?.membership?.status === "active") {
       return user.membership;
     }
-    if (!user?._id) return null;
-    const raw = localStorage.getItem(`${DUMMY_SUB_PREFIX}${user._id}`);
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw);
-      if (new Date(parsed.expiresAt) <= new Date()) {
-        localStorage.removeItem(`${DUMMY_SUB_PREFIX}${user._id}`);
-        return null;
-      }
-      return parsed;
-    } catch {
-      localStorage.removeItem(`${DUMMY_SUB_PREFIX}${user._id}`);
-      return null;
-    }
+    return null;
   }, [user]);
 
   useEffect(() => {
@@ -51,14 +36,6 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
-        Object.keys(localStorage).forEach((key) => {
-          if (
-            key.startsWith(DUMMY_SUB_PREFIX) ||
-            key.startsWith(PAYMENT_HISTORY_PREFIX)
-          ) {
-            localStorage.removeItem(key);
-          }
-        });
       }
     }
     setLoading(false);
@@ -105,14 +82,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
-      // Object.keys(localStorage).forEach((key) => {
-      //   if (
-      //     key.startsWith(DUMMY_SUB_PREFIX) ||
-      //     key.startsWith(PAYMENT_HISTORY_PREFIX)
-      //   ) {
-      //     localStorage.removeItem(key);
-      //   }
-      // });
       setAccessToken(null);
       setUser(null);
       setMembership(null);
@@ -151,77 +120,47 @@ export const AuthProvider = ({ children }) => {
     [membership],
   );
 
-  const getPaymentHistory = useCallback(() => {
-    if (!user?._id) return [];
-    const raw = localStorage.getItem(`${PAYMENT_HISTORY_PREFIX}${user._id}`);
-    return raw ? JSON.parse(raw) : [];
-  }, [user]);
-
+  // ─── NEW: Cancel membership via backend ───
   const cancelMembership = useCallback(async () => {
     try {
-      if (
-        user?.membership?.status === "active" &&
-        !membership?.paymentMethod?.includes("dummy")
-      ) {
-        await axios.delete("/api/v1/users/membership", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-        });
-      }
-      if (user?._id) {
-        localStorage.removeItem(`${DUMMY_SUB_PREFIX}${user._id}`);
-      }
-      const { membership: _, ...userWithoutMembership } = user || {};
-      updateUser(userWithoutMembership);
+      // Try backend cancel first (works for both real and dummy now)
+      await axios.delete("/api/v1/users/dummy-membership", {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
+
+      // Refresh user to get updated state
+      await refreshUser();
+
       return { success: true, message: "Membership cancelled successfully" };
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to cancel membership";
       throw new Error(msg);
     }
-  }, [user, membership, updateUser]);
+  }, [refreshUser]);
 
+  // ─── NEW: Renew membership via backend ───
   const renewMembership = useCallback(async () => {
     if (!membership) throw new Error("No active membership to renew");
     try {
-      if (
-        user?.membership?.status === "active" &&
-        !membership?.paymentMethod?.includes("dummy")
-      ) {
-        const res = await axios.put(
-          "/api/v1/users/membership/renew",
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-            },
+      // Try real backend renewal first
+      const res = await axios.put(
+        "/api/v1/users/membership/renew",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
-        );
-        await refreshUser();
-        return res.data;
-      }
-      const newExpiresAt = new Date(
-        Math.max(Date.now(), new Date(membership.expiresAt).getTime()) +
-          membership.durationMonths * 30 * 24 * 60 * 60 * 1000,
-      ).toISOString();
-      const renewed = {
-        ...membership,
-        expiresAt: newExpiresAt,
-        renewedAt: new Date().toISOString(),
-        transactionRef: `DUMMY_RENEW_${Date.now()}`,
-      };
-      localStorage.setItem(
-        `${DUMMY_SUB_PREFIX}${user._id}`,
-        JSON.stringify(renewed),
+        },
       );
-      const updatedUser = { ...user, membership: renewed };
-      updateUser(updatedUser);
-      return { success: true, membership: renewed };
+      await refreshUser();
+      return res.data;
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to renew membership";
       throw new Error(msg);
     }
-  }, [user, membership, updateUser, refreshUser]);
+  }, [membership, refreshUser]);
 
   const setAuthError = useCallback((errorMsg) => setError(errorMsg), []);
   const clearError = useCallback(() => setError(null), []);
@@ -249,7 +188,6 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     membership,
     hasMembershipAccess,
-    getPaymentHistory,
     cancelMembership,
     renewMembership,
   };

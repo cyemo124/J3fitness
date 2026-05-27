@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../hooks/useAuth";
-import { membershipAPI } from "../services/api";
+import { membershipAPI, userAPI } from "../services/api";
 import { toast } from "react-hot-toast";
 
 export default function MembershipCheckout() {
@@ -53,62 +53,26 @@ export default function MembershipCheckout() {
 
   const formatPrice = (price) => `₦${price?.toLocaleString() || 0}`;
 
+  // ─── UPDATED: Save to backend instead of localStorage ───
   const processDummyPayment = async () => {
     setPaymentProcessing(true);
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      const dummySubscription = {
-        userId: user._id,
+      // ─── SAVE DUMMY SUBSCRIPTION TO BACKEND ───
+      await userAPI.createDummyMembership({
         planId: plan._id,
         planName: plan.name,
         accessLevel: plan.accessLevel,
         price: plan.price,
         durationMonths: plan.durationMonths,
-        subscribedAt: new Date().toISOString(),
-        expiresAt: new Date(
-          Date.now() + plan.durationMonths * 30 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        paymentMethod: "dummy_test_card_4242",
-        transactionRef: `DUMMY_${Date.now()}`,
-        status: "active",
-      };
+      });
 
-      localStorage.setItem(
-        `membershipSubscription_${user._id}`,
-        JSON.stringify(dummySubscription),
-      );
-
-      const paymentRecord = {
-        _id: `dummy_pay_${Date.now()}`,
-        userId: {
-          _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-        },
-        type: "membership",
-        amount: plan.price,
-        status: "successful",
-        reference: dummySubscription.transactionRef,
-        planName: plan.name,
-        createdAt: dummySubscription.subscribedAt,
-        isDummy: true,
-      };
-
-      const historyKey = `paymentHistory_${user._id}`;
-      const existingHistory = JSON.parse(
-        localStorage.getItem(historyKey) || "[]",
-      );
-      existingHistory.unshift(paymentRecord);
-      localStorage.setItem(historyKey, JSON.stringify(existingHistory));
-
-      const updatedUser = {
-        ...user,
-        membership: dummySubscription,
-      };
-      updateUser(updatedUser);
+      // Refresh user from backend to get updated membership
+      const freshUser = await userAPI.getProfile();
+      const userData = freshUser.data || freshUser;
+      updateUser(userData);
 
       toast.success(`Successfully subscribed to ${plan.name}!`);
       setShowPaymentModal(false);

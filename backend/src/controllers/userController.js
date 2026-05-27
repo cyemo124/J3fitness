@@ -10,7 +10,11 @@ export const getProfile = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).populate("membership.planId");
     if (!user) throw new AppError("User not found", 404);
-    res.status(200).json({ success: true, data: user });
+
+    const userObj = user.toObject();
+    userObj.membership = user.resolvedMembership;
+
+    res.status(200).json({ success: true, data: userObj });
   } catch (error) {
     next(error);
   }
@@ -21,7 +25,6 @@ export const updateProfile = async (req, res, next) => {
     const { firstName, lastName, phone, dateOfBirth, gender, address } =
       req.body;
 
-    // Build update object
     const updateData = {
       firstName,
       lastName,
@@ -31,7 +34,6 @@ export const updateProfile = async (req, res, next) => {
       address,
     };
 
-    // Handle weightHistory if present
     if (req.body.weightHistory) {
       updateData.weightHistory = req.body.weightHistory.map((w) =>
         typeof w === "number" ? { weight: w } : w,
@@ -43,7 +45,10 @@ export const updateProfile = async (req, res, next) => {
       runValidators: true,
     });
 
-    res.status(200).json({ success: true, data: user });
+    const userObj = user.toObject();
+    userObj.membership = user.resolvedMembership;
+
+    res.status(200).json({ success: true, data: userObj });
   } catch (error) {
     next(error);
   }
@@ -111,7 +116,10 @@ export const getUserBookings = async (req, res, next) => {
 export const getMembershipInfo = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).populate("membership.planId");
-    res.status(200).json({ success: true, data: user.membership });
+    res.status(200).json({
+      success: true,
+      data: user.resolvedMembership,
+    });
   } catch (error) {
     next(error);
   }
@@ -120,7 +128,6 @@ export const getMembershipInfo = async (req, res, next) => {
 export const renewMembership = async (req, res, next) => {
   try {
     const { planId } = req.body;
-    // Implementation in next phase
     res.status(200).json({ success: true, message: "Membership renewed" });
   } catch (error) {
     next(error);
@@ -143,22 +150,17 @@ export const getDashboard = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // 1. Membership info
     const user = await User.findById(userId).populate("membership.planId");
-    const membership = user.membership || {
+    const membership = user.resolvedMembership || {
       status: "inactive",
       expiryDate: null,
     };
 
-    // 2. Recent bookings (last 3)
     const recentBookings = await Booking.find({ userId })
       .populate("classId", "name schedule")
       .sort({ classDate: -1 })
       .limit(3);
-    console.log("Found bookings:", recentBookings.length); // ← Add this
-    console.log("First booking:", recentBookings[0]);
 
-    // 3. Today's workout from routine
     const routine = await Routine.findOne({ user: userId });
     const todayName = new Date().toLocaleString("en-US", { weekday: "long" });
     const todayPlan = routine?.days?.find((d) => d.name === todayName);
@@ -169,12 +171,10 @@ export const getDashboard = async (req, res, next) => {
         }
       : null;
 
-    // 4. Recent workouts for streak + activity
     const workouts = await Workout.find({ user: userId })
       .sort({ date: -1 })
       .limit(30);
 
-    // 5. Calculate streak
     let streak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -192,11 +192,10 @@ export const getDashboard = async (req, res, next) => {
       if (hasWorkout) {
         streak++;
       } else if (i > 0) {
-        break; // Streak broken
+        break;
       }
     }
 
-    // 6. Check missed workout (had routine scheduled but no workout yesterday)
     let missedWorkout = false;
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -214,14 +213,12 @@ export const getDashboard = async (req, res, next) => {
       missedWorkout = !yesterdayWorkout;
     }
 
-    // 7. Recent activity (formatted from last 5 workouts)
     const recentActivity = workouts.slice(0, 5).map((w) => {
       const exerciseNames =
         w.exercises?.map((e) => e.name).join(", ") || "Workout";
       return `Completed ${exerciseNames}`;
     });
 
-    // 8. Add some variety to activity if empty
     if (recentActivity.length === 0 && todayWorkout) {
       recentActivity.push(`Scheduled: ${todayWorkout.name}`);
     }
@@ -236,6 +233,97 @@ export const getDashboard = async (req, res, next) => {
         recentActivity,
         recentBookings,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── DUMMY MEMBERSHIP CONTROLLERS ───
+
+export const createDummyMembership = async (req, res, next) => {
+  try {
+    const { planId, planName, accessLevel, price, durationMonths } = req.body;
+
+    const expiresAt = new Date(
+      Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000,
+    );
+
+    const transactionRef = `DUMMY_${Date.now()}`;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        dummyMembership: {
+          planId,
+          planName,
+          accessLevel,
+          price,
+          durationMonths,
+          subscribedAt: new Date(),
+          expiresAt,
+          paymentMethod: "dummy_test_card_4242",
+          transactionRef,
+          status: "active",
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    res.status(200).json({
+      success: true,
+      data: user.dummyMembership,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const cancelDummyMembership = async (req, res, next) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { "dummyMembership.status": "cancelled" } },
+      { new: true },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Dummy membership cancelled",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const changeDummyMembership = async (req, res, next) => {
+  try {
+    const { planId, planName, accessLevel, price, durationMonths } = req.body;
+
+    const expiresAt = new Date(
+      Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000,
+    );
+
+    const user = await User.findById(req.user.id);
+
+    user.dummyMembership = {
+      planId,
+      planName,
+      accessLevel,
+      price,
+      durationMonths,
+      subscribedAt: new Date(),
+      expiresAt,
+      paymentMethod: "dummy_test_card_4242",
+      transactionRef: `DUMMY_CHANGE_${Date.now()}`,
+      status: "active",
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: user.dummyMembership,
     });
   } catch (error) {
     next(error);

@@ -342,6 +342,36 @@ export const userAPI = {
       );
     }
   },
+  createDummyMembership: async (data) => {
+    try {
+      const response = await api.post("/users/dummy-membership", data);
+      return response.data;
+    } catch (err) {
+      throw new Error(
+        err.response?.data?.message || "Failed to create subscription",
+      );
+    }
+  },
+
+  cancelDummyMembership: async () => {
+    try {
+      const response = await api.delete("/users/dummy-membership");
+      return response.data;
+    } catch (err) {
+      throw new Error(
+        err.response?.data?.message || "Failed to cancel subscription",
+      );
+    }
+  },
+
+  changeDummyMembership: async (data) => {
+    try {
+      const response = await api.put("/users/dummy-membership", data);
+      return response.data;
+    } catch (err) {
+      throw new Error(err.response?.data?.message || "Failed to change plan");
+    }
+  },
 };
 
 // CLASS API

@@ -180,9 +180,9 @@ export default function Navbar() {
                         <NavLink to="/my-bookings" className={dropdownClass}>
                           My Bookings
                         </NavLink>
-                        <NavLink to="/membership" className={dropdownClass}>
+                        {/* <NavLink to="/membership" className={dropdownClass}>
                           Membership
-                        </NavLink>
+                        </NavLink> */}
                         <NavLink to="/payment-history" className={dropdownClass}>
                           Payment history
                         </NavLink>

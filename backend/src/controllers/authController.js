@@ -57,7 +57,7 @@ export const register = async (req, res, next) => {
       message: "Registration successful",
       accessToken,
       refreshToken,
-      user: user.toJSON(),
+      user: user.toJSON(), // ← includes resolvedMembership as membership
     });
   } catch (error) {
     next(error);
@@ -107,7 +107,7 @@ export const login = async (req, res, next) => {
       message: "Login successful",
       accessToken,
       refreshToken,
-      user: user.toJSON(),
+      user: user.toJSON(), // ← includes resolvedMembership as membership
     });
   } catch (error) {
     next(error);
@@ -142,7 +142,6 @@ export const refreshToken = async (req, res, next) => {
       throw new AppError("User not found or account deactivated", 401);
     }
 
-    // Rotate: invalidate old, create new
     const newRefreshToken = generateRefreshToken();
     const newAccessToken = generateAccessToken(user);
 
@@ -275,7 +274,6 @@ export const resetPassword = async (req, res, next) => {
     user.password = password;
     await user.save();
 
-    // Security: kill all sessions on password reset
     await Session.updateMany(
       { user: user._id, isValid: true },
       { isValid: false },
